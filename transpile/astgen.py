@@ -1,7 +1,7 @@
 
 import ast
-import luaparser.ast as last
-from luaparser.ast import to_lua_source
+import transpile.luaparser.ast as last
+from transpile.luaparser.ast import to_lua_source
 
 last_dict:ast.Dict = None
 last_class_def: ast.ClassDef = None
@@ -69,6 +69,10 @@ def var_reference(name:str):
 
 def var_malloc(name:str):
     return ast.Name(name, ast.Store())
+
+def handle_logical_or(expression:last.OrLoOp):
+    ast.Constant(value=f"if exp")
+
 
 def handle_unary_minus(expression:last.UMinusOp):
     return ast.UnaryOp(op=ast.USub(), operand=handle_expression(expression.operand))
@@ -455,13 +459,17 @@ def handle_orelse(orelse: last.ElseIf|list):
 
 def handle_if(statement: last.If):
     t = statement.test 
+
     if statement.test != False:
         t = handle_expression(statement.test)
+        
     oe = []
+
     if isinstance(statement.orelse, last.Block):
         oe = handle_block(statement.orelse)
     elif isinstance(statement.orelse, list):
         oe = [handle_statement(x) for x in statement.orelse]
+
     return ast.If(test=t, body=handle_block(statement.body), orelse=oe)
 
 def handle_elseif(statement:last.ElseIf):

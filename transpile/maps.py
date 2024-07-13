@@ -27,7 +27,7 @@ OP_MAP = {
     'ast.And': "and",
     'ast.Or': "or",
     'ast.Invert': "~",
-    'ast.Not': "not",
+    'ast.Not': "not ",
     'ast.UAdd': "+",
     'ast.USub': "-",
     'ast.Eq': "==",
@@ -36,9 +36,9 @@ OP_MAP = {
     'ast.LtE': "<=",
     'ast.Gt': ">",
     'ast.GtE': ">=",
-    'ast.Is': "is",
-    'ast.IsNot': "is not",
-    'ast.In': "in",
-    'ast.NotIn': "not in",
+    'ast.Is': "is ",
+    'ast.IsNot': "is not ",
+    'ast.In': "in ",
+    'ast.NotIn': "not in ",
 }
 

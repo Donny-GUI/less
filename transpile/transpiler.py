@@ -1,5 +1,5 @@
-from srcgen import SourceGenerator
-from astgen import make_python3_module, lua_ast_from_string, pyast,  python3_module
+from transpile.srcgen import SourceGenerator
+from transpile.astgen import make_python3_module, lua_ast_from_string, pyast,  python3_module
 
 
 def lua_to_python(lua_filepath:str) -> str:

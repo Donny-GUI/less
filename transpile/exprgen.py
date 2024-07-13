@@ -1,5 +1,5 @@
 import ast
-from maps import OP_MAP as opmap
+from transpile.maps import OP_MAP as opmap
 
 
 def try_star_to_string(node):

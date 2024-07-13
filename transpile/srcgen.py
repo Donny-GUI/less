@@ -1,6 +1,11 @@
 import ast
-from exprgen import starred_to_string, try_star_to_string
-from maps import get_op_string
+from transpile.exprgen import starred_to_string, try_star_to_string
+from transpile.maps import get_op_string
+
+
+"""============================================================================"""
+"""       [Transpiler]   Source Generator                                      """
+"""============================================================================"""
 
 
 def python_module_to_nodes(mod:ast.Module):
@@ -46,6 +51,9 @@ def binop_to_string(op):
 def attr_string(node: ast.Attribute):
     return f"{node.value.id}.{node.attr}"
 
+def if_or_expression(left, right):
+    return f"{left} if {left} else {right}"
+
 def value_to_string(node):
     if node == None:
         return ""
@@ -66,7 +74,10 @@ def value_to_string(node):
         left = value_to_string(node.left)
         right = value_to_string(node.right)
         op = binop_to_string(node.op)
-        return f"({left} {op} {right})"
+        if op == "or":
+            if right == "{}" or right == "[]":
+                return if_or_expression(left, right)
+        return f"{left} {op} {right}"
     elif isinstance(node, ast.Call):
         return make_call(node)
     elif isinstance(node, ast.Subscript):
@@ -109,6 +120,15 @@ def make_call(node:ast.Call):
     elif isinstance(node.func, ast.Constant):
         name = node.func.value
     return f"{name}({ass})"
+
+def handle_or_and_expression(left, op, right):
+    string = f"{left} {op} {right}"
+    parts = string.split(" ")
+    for p in parts:
+        if p == "or":
+            return f"{left} if {left} else {right}"
+        elif p == "and":
+            return f"{left} if {left} else {right}"
     
 def make_expression(node:ast.Expr):
     if isinstance(node, ast.Name):
@@ -129,6 +149,8 @@ def make_expression(node:ast.Expr):
         left = value_to_string(node.left)
         right = value_to_string(node.right)
         op = binop_to_string(node.op)
+        if op in "or":
+            return handle_or_and_expression(left, op, right)
         return f"{left} {op} {right}"
     elif isinstance(node, ast.Lambda):
         return f"lambda {", ".join([arg.arg for arg in node.args.args])}: {value_to_string(node.body)}"

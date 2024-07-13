@@ -1,5 +1,5 @@
-from transpiler import LuaPythonTranspiler
 import os
+from transpile.transpiler import LuaPythonTranspiler
 
 
 
