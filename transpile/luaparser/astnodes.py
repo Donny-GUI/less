@@ -153,6 +153,10 @@ class Block(Node):
         self.body: List[Statement] = body
 
 
+class Require(Statement):
+    def __init__(self, name: str, comments: List[Comment] | None = None, first_token: CommonToken | None = None, last_token: CommonToken | None = None):
+        super().__init__(name, comments, first_token, last_token)
+
 class Chunk(Node):
     """Define a Lua chunk.
 

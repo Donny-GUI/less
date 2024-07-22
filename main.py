@@ -1,5 +1,6 @@
 import os
-from transpile.transpiler import LuaPythonTranspiler
+from transpile.astmaker import LessASTConverter
+from transpile.astwriter import LessASTWriter
 
 
 
@@ -12,9 +13,22 @@ def collect_lua():
                 LUAFILES.append(os.path.join(root, file))
 collect_lua()
 
+class LuaPythonTranspiler:
+    def __init__(self) -> None:
+        self.converter = LessASTConverter()
+
+    def convert(self, object):
+        mod = self.converter.to_module(object)    
 
 for file in LUAFILES:
-    python = LuaPythonTranspiler.from_file(file)
-    print(python)
-    input("...")
-
+    converter = LessASTConverter()
+    writer = LessASTWriter()
+    mod = converter.to_module(file)
+    
+    strings = []
+    for node in mod.body:
+        print(f"[NODE] \033[33m {node}\033[0m")
+        strings.append(writer.visit(node))
+    with open("tempfile.py", "w") as f:
+        f.write("\n".join(strings))    
+    input("Check tempfile now....")
