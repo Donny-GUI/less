@@ -3,15 +3,17 @@ converts lua.luaparser.astnodes[nodes] into python.ast[nodes]
 """
 import ast
 import luaparser.ast as last
-from luaparser.astnodes import *
 import os
 from pathlib import Path
 from transpile.macros import Is
+from transpile.nodes import Range, Super, MethodCall, MethodDef, ClassBase
+
 
 
 """----------------------------------------------------------------------------"""
 """   Constant Kinds                                                           """
 """----------------------------------------------------------------------------"""
+
 
 
 class Consts:
@@ -82,7 +84,7 @@ class LessASTConverter:
                     is_body = False
             if not is_body:
                 raise Exception("not a listable object to convert")
-            o = last.Chunk(body=Block(body=[object]))
+            o = last.Chunk(body=last.Block(body=[object]))
 
         elif isinstance(object, last.Block):
             o = last.Chunk(body=object)
@@ -94,6 +96,9 @@ class LessASTConverter:
             total_nodes = [self.convert(x) for x in o.body]
 
         for cl in self._to_find:
+            if cl.function.name == "init":
+                cl.function.name = "__init__"
+                self._check_for_super(cl)
             self._classes_map[cl.key].body.append(cl.function)
             total_nodes = [x for x in total_nodes if x!=cl.function]
             
@@ -112,12 +117,32 @@ class LessASTConverter:
         m = ast.Module(body=retv, type_ignores=[])
         
         return m
-        
+    
+    def _super_from_callattr(self, node:ast.Call):
+        callfunc = ast.Attribute(value=ast.Call(func=ast.Name(id='super', 
+                                                              ctx=ast.Load()), 
+                                                args=[], 
+                                                keywords=[]), 
+                                 attr='__init__', 
+                                 ctx=ast.Load())
+        return ast.Call(func=callfunc, args=node.args, keywords=[])
+    
+    def _check_for_super(self, node:FindableMethod):
+        clss = self._classes_map[node.key]
+        for arg in node.function.args.args:
+            if arg.arg == "self":
+                for n in node.function.body:
+                    if isinstance(n, ast.Call):
+                        if isinstance(n.func, ast.Attribute):
+                            if n.func.attr == "init":
+                                for base in clss.bases:
+                                    if base.name.id == n.func.value.id:
+                                        n = self._super_from_callattr(n)
 
     def _multi_value(self, values:list[any]):
         lv = len(values)
         if lv == 0:
-            return ast.Constant(value="None", kind="i")
+            return ast.Constant(value=None, kind="i")
         elif lv == 1:
             return self.convert(values[0])
         return ast.Tuple(elts=[self.convert(x) for x in values])
@@ -131,7 +156,7 @@ class LessASTConverter:
             ast.fix_missing_locations(n)
         return n
     
-    def _table_is_list(self, node:Table) -> bool:
+    def _table_is_list(self, node:last.Table) -> bool:
         for field in node.fields:
             if field.key == None:
                 return True
@@ -183,7 +208,6 @@ class LessASTConverter:
         
         return n
 
-
     def convert_type(self, node):
         print("LessNodeConverter.convert_type")
         return "None"
@@ -198,7 +222,7 @@ class LessASTConverter:
         print("LessNodeConverter.convert_NoneType")
         return Consts.none
     
-    def convert_Number(self, node:Number):
+    def convert_Number(self, node:last.Number):
         print("LessNodeConverter.convert_Number")
         n = ast.Constant(node.n, kind='i')
         
@@ -214,13 +238,27 @@ class LessASTConverter:
         n = [self.convert(x) for x in node.body]
         return n
 
+    def convert_ClassBases(self, node:last.Assign):
+        return [self.convert_ClassBase(val) for val in node.values]
+
+    def convert_ClassBase(self, node:last.Invoke|last.Index|last.Name):
+        string = last.to_lua_source(node)
+        if ":" in string:
+            name = string.split(":")[0]
+            if name == "Object":
+                name = name.lower()
+            return ClassBase(name)
+        return ClassBase(string)
+        
     def convert_ClassDef(self, node: last.Assign):
         print("LessNodeConverter.convert_ClassDef")
-        base = self.convert(node.values)
-        if len(base) > 0:
-            base = base[0]
+        
+        bases = self.convert_ClassBases(node)
+        #base = self.convert(node.values)
+        #if len(base) > 0:
+        #    base = base[0]
         names = [node for node in node.targets if isinstance(node, last.Name)]
-        _class = ast.ClassDef(name=names[0].id, bases=base, keywords=[], body=[], decorator_list=[], type_params=[])
+        _class = ast.ClassDef(name=names[0].id, bases=bases, keywords=[], body=[], decorator_list=[], type_params=[])
         self._classes.append(_class)
         self._classes_map[names[0].id] = _class
         
@@ -243,7 +281,7 @@ class LessASTConverter:
         
         return n
         
-    def convert_While(self, node:While=None):
+    def convert_While(self, node:last.While=None):
         print("LessNodeConverter.convert_While")
         body = self.convert(node.body)
         test = self.convert(node.test)
@@ -251,7 +289,7 @@ class LessASTConverter:
         
         return n
         
-    def convert_Do(self, node:Do=None) -> list[ast.AST]|None:
+    def convert_Do(self, node:last.Do=None) -> list[ast.AST]|None:
         print("LessNodeConverter.convert_Do")
         items = []
         for n in node.body:
@@ -259,8 +297,7 @@ class LessASTConverter:
         
         return items
         
-    
-    def convert_If(self, node:If=None):
+    def convert_If(self, node:last.If=None):
         print("LessNodeConverter.convert_If")
         test = self.convert(node.test)
         body = self.convert(node.body)
@@ -274,7 +311,7 @@ class LessASTConverter:
         
         return n
 
-    def convert_ElseIf(self, node:ElseIf=None):
+    def convert_ElseIf(self, node:last.ElseIf=None):
         print("LessNodeConverter.convert_ElseIf")
         test = self.convert(node.test)
         body = self.convert(node.body)
@@ -288,24 +325,24 @@ class LessASTConverter:
         
         return n
 
-    def convert_Label(self, node:Label=None):
+    def convert_Label(self, node:last.Label=None):
         print("LessNodeConverter.convert_Label")
         n = ast.Constant(f"\n# {node}\n", kind="label")
         
         return n
 
-    def convert_Goto(self, node:Goto=None):
+    def convert_Goto(self, node:last.Goto=None):
         print("LessNodeConverter.convert_Goto")
         n = ast.Constant(f"\n# {node}\n", kind="goto")
         
         return n
 
-    def convert_Break(self, node:Break=None):
+    def convert_Break(self, node:last.Break=None):
         print("LessNodeConverter.convert_Break")
         n = ast.Break()
         return n
 
-    def convert_Return(self, node:Return=None):
+    def convert_Return(self, node:last.Return=None):
         print("LessNodeConverter.convert_Return")
         if isinstance(node.values, bool):
             kind = node.values
@@ -318,7 +355,7 @@ class LessASTConverter:
         
         return n
 
-    def convert_Fornum(self, node:Fornum=None):
+    def convert_Fornum(self, node:last.Fornum=None):
         print("LessNodeConverter.convert_Fornum")
         target = self.convert(node.target)
         start = self.convert(node.start)
@@ -330,11 +367,11 @@ class LessASTConverter:
         
         return n
 
-    def convert_Forin(self, node:Forin=None):
+    def convert_Forin(self, node:last.Forin=None):
         print("LessNodeConverter.convert_Forin")
         targets = self.convert(node.targets)
         iter = self.convert(node.iter)
-        if isinstance(node.iter, last.Call):
+        if isinstance(node.iter, last.Invoke):
             if node.iter.func.id == "pairs":
                 iter = ast.Call(func=ast.Attribute(value=self.convert(node.iter.args[0]), attr="items", ctx=ast.Load()), args=[], keywords=[])
                 targets = [ast.Name(value=x, kind='i') for x in node.targets[0].id]
@@ -363,6 +400,7 @@ class LessASTConverter:
                 items.append(ast.arg(py.id))
             elif isinstance(py, ast.Constant):
                 items.append(ast.arg(py.value))
+            
             else:
                 break
         args = items
@@ -376,8 +414,15 @@ class LessASTConverter:
 
     def convert_Require(self, node:last.Call) -> ast.ImportFrom:
         if isinstance(node.func.args[0], last.String):
+            # makes sure that the Call parent has a String as an arg
             parts = node.func.args[0].s.split(node.func.args[0].delimiter)
-            return ast.ImportFrom(module=".".join(parts[:-1]), names=[parts[-1]])
+            length = len(parts)
+            if length == 1:
+                return ast.Import(names=[parts[0]])
+            elif length == 2:
+                return ast.ImportFrom(module=parts[0], names=[parts[1:]])
+            elif length >= 3:
+                return ast.ImportFrom(module=".".join(parts[:-1]), names=[parts[-1]])
 
     def convert_Call(self, node: last.Call=None):
         print("LessNodeConverter.convert_Call")
@@ -390,12 +435,49 @@ class LessASTConverter:
         n = ast.Call(func=func, args=args, keywords=keywords)
         return n
 
-    def convert_Invoke(self, node:Invoke=None):
+    def convert_Invoke(self, node:last.Invoke=None) -> ast.Call:
         print("LessNodeConverter.convert_Invoke")
-        n = ast.Attribute(attr=self.convert(node.source), value=ast.Call(func=self.convert(node.func).id, args=self.convert_Args(node.args), keywords=None))
-        return n
 
-    def convert_Function(self, node:Function=None):
+        # Ensure the node is of type Invoke
+        if not isinstance(node, last.Invoke):
+            raise TypeError("Expected luaparser.astnodes.Invoke")
+        print(last.to_lua_source(node))
+        input("///")
+        # Convert the object part
+        obj_python_ast = self.convert(node.source)  # This is the 'object' part of 'object:method'
+
+        # Convert the method name part
+        method_name = self.convert(node.func)  # This is the 'method' part of 'object:method'
+        if isinstance(method_name, ast.Name):
+            method_name = method_name.id
+        elif isinstance(method_name, ast.Call):
+            if isinstance(method_name.func, ast.Name):
+                method_name = method_name.func.id
+            else:
+                method_name = method_name.func
+        
+        
+        # Create an ast.Attribute for the 'object.method' part
+        method_attr = ast.Attribute(
+            value=obj_python_ast,  # The object part as Python AST
+            attr=method_name,   # The method name as a string
+            ctx=ast.Load()         # Context is load because we're accessing an attribute
+        )
+
+        # Convert the arguments part
+        args = node.args  # This should be a list of argument nodes
+        args_python_ast = self.convert_Args(args)
+
+        # Create an ast.Call for the method invocation
+        call_node = ast.Call(
+            func=method_attr,
+            args=args_python_ast,
+            keywords=[]  # Lua doesn't have keyword arguments
+        )
+
+        return call_node
+
+    def convert_Function(self, node:last.Function=None):
         print("LessNodeConverter.convert_Function")
         name = self.convert(node.name)
         args = self.convert_Args(node.args)
@@ -404,7 +486,7 @@ class LessASTConverter:
         
         return n
 
-    def convert_LocalFunction(self, node:LocalFunction=None):
+    def convert_LocalFunction(self, node:last.LocalFunction=None):
         print("convertLessNodeConverter._LocalFunction")
         name = self.convert(node.name)
         args = self.convert_Args(node.args)
@@ -412,8 +494,32 @@ class LessASTConverter:
         n = ast.FunctionDef(name=name, args=args, body=body)
         
         return n
+    
+    def convert_Super(self, node:last.Invoke):
+        callfunc = ast.Attribute(value=ast.Call(func=ast.Name(id='super', 
+                                                              ctx=ast.Load()), 
+                                                args=[], 
+                                                keywords=[]), 
+                                 attr='__init__', 
+                                 ctx=ast.Load())
+        return ast.Call(func=callfunc, args=self.convert_Args(node.args), keywords=[])
         
-    def convert_Method(self, node:Method=last.Method):
+    def convert_InitializerBody(self, method:last.Method):
+        print("InitializerBody")
+        retv = []
+        b = method.body
+        if isinstance(b, last.Block):
+            b = method.body.body
+        for node in b:
+            if isinstance(node, last.Invoke):
+                if node.func.id == "init":
+                    retv.append(self.convert_Super(node))
+                    continue
+            retv.append(self.convert(node))
+        
+        return retv
+
+    def convert_Method(self, node:last.Method=last.Method):
         print("LessNodeConverter.convert_Method")
         key = None
         src = self.convert(node.source)
@@ -421,6 +527,8 @@ class LessASTConverter:
             key = src.id
 
         name = self.convert(node.name)
+        print(last.to_lua_source(node.name))
+        input()
         # make arguments ast here
         args: ast.arguments = self.convert_Args(node.args)
         # manually add the self arg
@@ -433,6 +541,7 @@ class LessASTConverter:
             name = name.id
         if name == "init":
             name == "__init__"
+            body = self.convert_InitializerBody(node)
         n = ast.FunctionDef(name=name, args=args, body=body, type_params=[], decorator_list=[])
         self._to_find.append(FindableMethod(key=key, function=n))
         return n
@@ -442,7 +551,7 @@ class LessASTConverter:
         n = ast.Constant(value="None", kind="None")
         return n
 
-    def convert_TrueExpr(self, node:TrueExpr=None):
+    def convert_TrueExpr(self, node:last.TrueExpr=None):
         print("LessNodeConverter.convert_TrueExpr")
         n = ast.Constant(value=True, kind="True")
         return n
@@ -452,14 +561,14 @@ class LessASTConverter:
         n = ast.Constant(value=False, kind="False")
         return n
 
-    def convert_List(self, node:Table):
+    def convert_List(self, node:last.Table):
         print("LessNodeConverter.convert_List")
         l = ast.List(elts=[])
         for k, v in node.fields:
             l.elts.append(self.convert(v))
         return l
 
-    def convert_Dict(self, node: Table):
+    def convert_Dict(self, node: last.Table):
         print("LessNodeConverter.convert_Dict")
         d = ast.Dict(keys=[], values=[])
         for field in node.fields:
@@ -471,27 +580,27 @@ class LessASTConverter:
             d.values.append(v)
         return d
 
-    def convert_Table(self, node:Table=None):
+    def convert_Table(self, node:last.Table=None):
         print("LessNodeConverter.convert_Table")
-        if self._table_is_list(node) == True:
+        if Is.List(node) == True:
             n = self.convert_List(node)
         else:
             n = self.convert_Dict(node)
         
         return n
 
-    def convert_Field(self, node:Field=None) -> tuple[ast.AST]:
+    def convert_Field(self, node:last.Field=None) -> tuple[ast.AST]:
         print("LessNodeConverter.convert_Field")
         n = (self.convert(node.key), self.convert(node.value))
         
         return n
 
-    def convert_Dots(self, node:Dots=None):
+    def convert_Dots(self, node:last.Dots=None):
         print("LessNodeConverter.convert_Dots")
-        n = ast.Constant("...", kind="Ellipsis")
+        n = ast.Constant(..., kind="Ellipsis")
         return n
 
-    def convert_AnonymousFunction(self, node:AnonymousFunction=None):
+    def convert_AnonymousFunction(self, node:last.AnonymousFunction=None):
         print("convert_AnoLessNodeConverter.nymousFunction")
         args = self.convert(node.args)
         body = self.convert(node.body)
@@ -597,7 +706,7 @@ class LessASTConverter:
         
         return n
 
-    def convert_BinaryOp(self, node:BinaryOp=None):
+    def convert_BinaryOp(self, node:last.BinaryOp=None):
         print("LessNodeConverter.convert_BinaryOp")
         if isinstance(node, last.RelOp):
             n = self.convert_RelOp(node)
@@ -607,7 +716,6 @@ class LessASTConverter:
             n = self.convert_BitOp(node)
         elif isinstance(node, last.LoOp):
             n = self.convert_LoOp(node)
-        
         
         return n
         
@@ -624,7 +732,7 @@ class LessASTConverter:
         
         return n
 
-    def convert_UnaryOp(self, node:UnaryOp=None):
+    def convert_UnaryOp(self, node:last.UnaryOp=None):
         print("LessNodeConverter.convert_UnaryOp")
         n = self.convert_OP(node)
         
@@ -652,7 +760,6 @@ class LessASTConverter:
         elif isinstance(n, last.String):
             return n.id
         
-
     def convert_Index(self, node:last.Index=None):
         print("LessNodeConverter.convert_Index")
         if node.notation == last.IndexNotation.DOT:
@@ -666,13 +773,13 @@ class LessASTConverter:
         
         return n
 
-    def convert_Varargs(self, node:Varargs=None):
+    def convert_Varargs(self, node:last.Varargs=None):
         print("LessNodeConverter.convert_Varargs")
         n = ast.Constant(value="*args", kind="*args")
         
         return n
 
-    def convert_Repeat(self, node:Repeat=None):
+    def convert_Repeat(self, node:last.Repeat=None):
         print("LessNodeConverter.convert_Repeat")
         body = self.convert(node.body)
         t = ast.If(test=self.convert(node.test), body=ast.Break(), orelse=[])
@@ -681,7 +788,7 @@ class LessASTConverter:
         
         return n
 
-    def convert_SemiColon(self, node:SemiColon=None):
+    def convert_SemiColon(self, node:last.SemiColon=None):
         print("LessNodeConverter.convert_SemiColon")
         n = ast.Constant(";")
         return n
@@ -704,7 +811,6 @@ class LessASTConverter:
         """
         return ast.IfExp(test=self.convert(node.left),body=self.convert(node.left), orelse=self.convert(node.right))
         
-
     def convert_LocalAssign(self, node: last.LocalAssign):
         print("conveLessNodeConverter.rt_LocalAssign")
         return self.convert_Assign(node)

@@ -2,7 +2,7 @@ import ast
 import sys 
 from contextlib import contextmanager, nullcontext
 from enum import IntEnum, auto, _simple_enum
-from luaparser.astnodes import Name as LuaName
+from luaparser.astnodes import *
 
 
 def iter_fields(node):
@@ -289,7 +289,7 @@ class LessASTWriter(NodeVisitor):
         subwriter = LessASTWriter()
         if isinstance(node, list):
             for item in node:
-                parts.append(self.subwrite(item))
+                parts.append(subwriter.visit(item))
             return "".join(parts)
         elif isinstance(node, ast.AST):
             return subwriter.visit(node)
@@ -526,6 +526,25 @@ class LessASTWriter(NodeVisitor):
         with self.block():
             self.traverse(node.body)
 
+    def _classDef_bases_helper(self, node):
+        comma = False
+        if isinstance(node.bases, ast.Constant):
+            self.traverse(node.bases)
+        elif isinstance(node.bases, ast.Attribute):
+            self.traverse(node.bases.value)
+        elif isinstance(node.bases, ast.Call):
+            if isinstance(node.bases.func, ast.Name):
+                self.traverse(node.bases.func)
+            elif isinstance(node.bases.func, ast.Attribute):
+                self.traverse(node.bases.func.value)
+        else:
+            for e in node.bases:
+                if comma:
+                    self.write(", ")
+                else:
+                    comma = True
+                self.traverse(e)
+
     def visit_ClassDef(self, node):
         print("LessASTWriter.visit_ClassDef")
         self.maybe_newline()
@@ -538,18 +557,7 @@ class LessASTWriter(NodeVisitor):
         if hasattr(node, "type_params"):
             self._type_params_helper(node.type_params)
         with self.delimit_if("(", ")", condition = node.bases):
-            comma = False
-            if isinstance(node.bases, ast.Constant):
-                self.traverse(node.bases)
-            elif isinstance(node.bases, ast.Attribute):
-                self.traverse(node.bases)
-            else:
-                for e in node.bases:
-                    if comma:
-                        self.write(", ")
-                    else:
-                        comma = True
-                    self.traverse(e)
+            self._classDef_bases_helper(node)
             if node.keywords != []:
                 for e in node.keywords:
                     if comma:
@@ -1038,7 +1046,23 @@ class LessASTWriter(NodeVisitor):
         "IsNot": "is not",
         "In": "in",
         "NotIn": "not in",
+        "Add": "+",
+        "Sub": "-",
+        "Mult": "*",
+        "MatMult": "@",
+        "Div": "/",
+        "Mod": "%",
+        "LShift": "<<",
+        "RShift": ">>",
+        "BitOr": "|",
+        "BitXor": "^",
+        "BitAnd": "&",
+        "FloorDiv": "//",
+        "Pow": "**",
     }
+
+    def visit_ClassBase(self, node):
+        self.traverse(node.name)
 
     def visit_Compare(self, node):
         print("LessASTWriter.visit_Compare")

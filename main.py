@@ -29,6 +29,7 @@ for file in LUAFILES:
     for node in mod.body:
         print(f"[NODE] \033[33m {node}\033[0m")
         strings.append(writer.visit(node))
-    with open("tempfile.py", "w") as f:
+        strings.append(f"# {node}")
+    with open("tempfile1.py", "w") as f:
         f.write("\n".join(strings))    
     input("Check tempfile now....")

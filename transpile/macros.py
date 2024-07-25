@@ -1,11 +1,8 @@
 import luaparser.ast as last
-from transpile.astmaker import LessASTConverter
 
 
 
 class Is:
-
-    conv = LessASTConverter()
 
     def Node(node):
         return isinstance(node, last.Node)
@@ -44,6 +41,25 @@ class Is:
                 if isinstance(v, last.Invoke) == True:
                     if isinstance(v.func, last.Name) == True:
                         if v.func.id == "extend":
+                            return True
+        return
+    
+    def Localize(node:last.Assign):
+        if isinstance(node, last.Assign):
+            for v in node.values:
+                if isinstance(v, last.Invoke) == True:
+                    for key, value in v.__dict__.items():
+                        if key == "func":
+                            if isinstance(value, last.Name):
+                                if value.id == "localize":
+                                    return True
+                            if isinstance(value, last.Call):
+                                if isinstance(value.func, last.Name):
+                                    if value.func.id == "localize":
+                                        return True
+
+                    if isinstance(v.func, last.Call) == True:
+                        if v.func.id == "localize":
                             return True
         return
 
