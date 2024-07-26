@@ -25,3 +25,8 @@ from less.tranpiler import LuaPythonTranpiler as lpt
 python_script = lpt.from_file("myfile.lua")
 ```
 
+
+# Features
+Structural Pattern Matching
+- creates a match case block for optimizing the transpiler
+
