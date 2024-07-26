@@ -1,6 +1,18 @@
 
 import re
 import ast
+import os
+
+
+def index_fix(string):
+    matching = r"\'.+\[.+\]\'"
+    pattern = r"\'(.+)\[(.+)\]\'"
+    patsearch = re.search(pattern, string)
+    if patsearch:
+        digit = patsearch.group(1)
+        object = patsearch.group(2)
+        string = re.sub(matching, f"{object}[{digit}]", string)
+    return string
 
 
 def extract_method_arguments(method_string):
@@ -32,10 +44,14 @@ class SourceWriter:
         self.source = []
         self.nodes = []
     
+    def make_directory(self, dir):
+        os.makedirs(dir, exist_ok=True)
+
     def add(self, node, source):
             
         self.nodes.append(node)
         source = fix_supers(source)
+        source = index_fix(source)
         if isinstance(node, ast.ClassDef):
             source = fix_bases_init(source, node)
         self.source.append(source)
