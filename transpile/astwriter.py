@@ -100,16 +100,27 @@ class NodeVisitor(object):
 
     def generic_visit(self, node):
         """Called if no explicit visitor function exists for a node."""
-        for field, value in iter_fields(node):
-            if isinstance(value, list):
-                for item in value:
-                    if isinstance(item, ast.AST):
-                        self.visit(item)
-            elif isinstance(value, ast.AST):
-                self.visit(value)
+        try:
+            for field, value in iter_fields(node):
+                if isinstance(value, list):
+                    for item in value:
+                        if isinstance(item, ast.AST):
+                            self.visit(item)
+                elif isinstance(value, ast.AST):
+                    self.visit(value)
+        except:
+            method = 'visit_' + node.__class__.__name__
+            visitor = getattr(self, method)
+            return visitor(node)
+            
 
     def visit_Constant(self, node):
-        print("LessASTWriter.visit_Constant")
+        if node.kind == "AttributeLiteral":
+            self.visit_AttributeLiteral(node)
+            return
+        elif node.kind == "MapAccess":
+            self.visit_MapAccess(node)
+            return
         value = node.value
         type_name = ast._const_node_type_names.get(type(value))
         if type_name is None:
@@ -141,7 +152,11 @@ class LessASTWriter(NodeVisitor):
         self._type_ignores = {}
         self._indent = 0
         self._avoid_backslashes = _avoid_backslashes
+
         self._in_try_star = False
+        self._inside_class = False
+        self._inside_method = False
+        self._current_class = None
 
     def interleave(self, inter, f, seq):
         """Call f on each item in seq, calling inter() in between."""
@@ -198,8 +213,7 @@ class LessASTWriter(NodeVisitor):
         appended after the colon character.
         """
         self.write(":")
-        if extra:
-            self.write(extra)
+
         self._indent += 1
         yield
         self._indent -= 1
@@ -267,7 +281,7 @@ class LessASTWriter(NodeVisitor):
     # NodeVisitor.generic_visit to handle any nodes (as it calls back in to
     # the subclass visit() method, which resets self._source to an empty list)
     def visit_many(self, many):
-        print("LessASTWriter.visit_many")
+        
         for x in many:
             if isinstance(x, list):
                 self.visit_many(x)
@@ -313,6 +327,14 @@ class LessASTWriter(NodeVisitor):
         
         return "".join(s)
 
+    def visit_AttributeLiteral(self, node):
+        self.set_precedence(_Precedence.ATOM, node.value)
+        self.fill(node.value)
+    
+    def visit_MapAccess(self, node):
+        self.set_precedence(_Precedence.ATOM, node.value)
+        self.fill(node.value)
+
     def _write_docstring_and_traverse_body(self, node):
         if (docstring := self.get_raw_docstring(node)):
             self._write_docstring(docstring)
@@ -321,7 +343,7 @@ class LessASTWriter(NodeVisitor):
             self.traverse(node.body)
 
     def visit_Module(self, node):
-        print("LessASTWriter.visit_Module")
+        
         self._type_ignores = {
             ignore.lineno: f"ignore{ignore.tag}"
             for ignore in node.type_ignores
@@ -330,7 +352,7 @@ class LessASTWriter(NodeVisitor):
         self._type_ignores.clear()
 
     def visit_FunctionType(self, node):
-        print("LessASTWriter.visit_FunctionType")
+        
         with self.delimit("(", ")"):
             self.interleave(
                 lambda: self.write(", "), self.traverse, node.argtypes
@@ -340,13 +362,13 @@ class LessASTWriter(NodeVisitor):
         self.traverse(node.returns)
 
     def visit_Expr(self, node):
-        print("LessASTWriter.visit_Expr")
+        
         self.fill()
         self.set_precedence(_Precedence.YIELD, node.value)
         self.traverse(node.value)
 
     def visit_NamedExpr(self, node):
-        print("LessASTWriter.visit_NamedExpr")
+        
         with self.require_parens(_Precedence.NAMED_EXPR, node):
             self.set_precedence(_Precedence.ATOM, node.target, node.value)
             self.traverse(node.target)
@@ -354,12 +376,12 @@ class LessASTWriter(NodeVisitor):
             self.traverse(node.value)
 
     def visit_Import(self, node):
-        print("LessASTWriter.visit_Import")
+        
         self.fill("import ")
         self.interleave(lambda: self.write(", "), self.traverse, node.names)
 
     def visit_ImportFrom(self, node):
-        print("LessASTWriter.visit_ImportFrom")
+        
         self.fill("from ")
         self.write("." * (node.level or 0))
         if node.module != []:
@@ -371,7 +393,7 @@ class LessASTWriter(NodeVisitor):
         pass
 
     def visit_Assign(self, node):
-        print("LessASTWriter.visit_Assign")
+        
         self.fill()
         for target in node.targets:
             self.set_precedence(_Precedence.TUPLE, target)
@@ -382,14 +404,14 @@ class LessASTWriter(NodeVisitor):
             self.write(type_comment)
 
     def visit_AugAssign(self, node):
-        print("LessASTWriter.visit_AugAssign")
+        
         self.fill()
         self.traverse(node.target)
         self.write(" " + self.binop[node.op.__class__.__name__] + "= ")
         self.traverse(node.value)
 
     def visit_AnnAssign(self, node):
-        print("LessASTWriter.visit_AnnAssign")
+        
         self.fill()
         with self.delimit_if("(", ")", not node.simple and isinstance(node.target, ast.Name)):
             self.traverse(node.target)
@@ -400,31 +422,31 @@ class LessASTWriter(NodeVisitor):
             self.traverse(node.value)
 
     def visit_Return(self, node):
-        print("LessASTWriter.visit_Return")
+        
         self.fill("return")
         if node.value != None:
             self.write(" ")
             self.traverse(node.value)
 
     def visit_Pass(self, node):
-        print("LessASTWriter.visit_Pass")
+        
         self.fill("pass")
 
     def visit_Break(self, node):
-        print("LessASTWriter.visit_Break")
+        
         self.fill("break")
 
     def visit_Continue(self, node):
-        print("LessASTWriter.visit_Continue")
+        
         self.fill("continue")
 
     def visit_Delete(self, node):
-        print("LessASTWriter.visit_Delete")
+        
         self.fill("del ")
         self.interleave(lambda: self.write(", "), self.traverse, node.targets)
 
     def visit_Assert(self, node):
-        print("LessASTWriter.visit_Assert")
+        
         self.fill("assert ")
         self.traverse(node.test)
         if node.msg != None:
@@ -432,17 +454,17 @@ class LessASTWriter(NodeVisitor):
             self.traverse(node.msg)
         
     def visit_Global(self, node):
-        print("LessASTWriter.visit_Global")
+        
         self.fill("global ")
         self.interleave(lambda: self.write(", "), self.write, node.names)
 
     def visit_Nonlocal(self, node):
-        print("LessASTWriter.visit_Nonlocal")
+        
         self.fill("nonlocal ")
         self.interleave(lambda: self.write(", "), self.write, node.names)
 
     def visit_Await(self, node):
-        print("LessASTWriter.visit_Await")
+        
         with self.require_parens(_Precedence.AWAIT, node):
             self.write("await")
             if node.value:
@@ -451,7 +473,7 @@ class LessASTWriter(NodeVisitor):
                 self.traverse(node.value)
 
     def visit_Yield(self, node):
-        print("LessASTWriter.visit_Yield")
+        
         with self.require_parens(_Precedence.YIELD, node):
             self.write("yield")
             if node.value:
@@ -460,7 +482,7 @@ class LessASTWriter(NodeVisitor):
                 self.traverse(node.value)
 
     def visit_YieldFrom(self, node):
-        print("LessASTWriter.visit_YieldFrom")
+        
         with self.require_parens(_Precedence.YIELD, node):
             self.write("yield from ")
             if not node.value:
@@ -469,7 +491,7 @@ class LessASTWriter(NodeVisitor):
             self.traverse(node.value)
 
     def visit_Raise(self, node):
-        print("LessASTWriter.visit_Raise")
+        
         self.fill("raise")
         if not node.exc:
             if node.cause:
@@ -497,7 +519,7 @@ class LessASTWriter(NodeVisitor):
                 self.traverse(node.finalbody)
 
     def visit_Try(self, node):
-        print("LessASTWriter.visit_Try")
+        
         prev_in_try_star = self._in_try_star
         try:
             self._in_try_star = False
@@ -506,7 +528,7 @@ class LessASTWriter(NodeVisitor):
             self._in_try_star = prev_in_try_star
 
     def visit_TryStar(self, node):
-        print("LessASTWriter.visit_TryStar")
+        
         prev_in_try_star = self._in_try_star
         try:
             self._in_try_star = True
@@ -515,7 +537,7 @@ class LessASTWriter(NodeVisitor):
             self._in_try_star = prev_in_try_star
 
     def visit_ExceptHandler(self, node):
-        print("LessASTWriter.visit_ExceptHandler")
+        
         self.fill("except*" if self._in_try_star else "except")
         if node.type:
             self.write(" ")
@@ -546,7 +568,9 @@ class LessASTWriter(NodeVisitor):
                 self.traverse(e)
 
     def visit_ClassDef(self, node):
-        print("LessASTWriter.visit_ClassDef")
+        self._inside_class = True
+        self._current_class = node
+        
         self.maybe_newline()
         if hasattr(node, "decorator_list"):
             for deco in node.decorator_list:
@@ -564,25 +588,46 @@ class LessASTWriter(NodeVisitor):
                         self.write(", ")
                     else:
                         comma = True
+                        print(e)
                     self.traverse(e)
 
         with self.block():
-            self._write_docstring_and_traverse_body(node)
+            self.traverse(node.body)
+
+        self._inside_class = False
 
     def visit_FunctionDef(self, node):
-        print("LessASTWriter.visit_FunctionDef")
+        if self._inside_class == True:
+            self._inside_method = True
+        
         self._function_helper(node, "def")
+        self._inside_method = False
 
     def visit_AsyncFunctionDef(self, node):
-        print("LessASTWriter.visit_AsyncFunctionDef")
+        
         self._function_helper(node, "async def")
 
     def _function_helper(self, node, fill_suffix):
         self.maybe_newline()
-        for deco in node.decorator_list:
-            self.fill("@")
-            self.traverse(deco)
-        def_str = fill_suffix + " " + node.name
+        try:
+            for deco in node.decorator_list:
+                self.fill("@")
+                self.traverse(deco)
+        except:
+            pass
+        
+        if isinstance(node.name, ast.Attribute):
+            if isinstance(node.name.attr, ast.Name):
+                def_str = fill_suffix + " " + node.name.attr.id
+            else:   
+                def_str = fill_suffix + " " + node.name.attr
+        elif isinstance(node.name, ast.Name):
+            def_str = fill_suffix + " " + node.name.id
+        elif isinstance(node.name, ast.Constant):
+            def_str = fill_suffix + " " + node.id
+        else:
+            def_str = fill_suffix + " " + node.name
+            
         self.fill(def_str)
         if hasattr(node, "type_params"):
             self._type_params_helper(node.type_params)
@@ -591,8 +636,8 @@ class LessASTWriter(NodeVisitor):
         if node.returns:
             self.write(" -> ")
             self.traverse(node.returns)
-        with self.block(extra=self.get_type_comment(node)):
-            self._write_docstring_and_traverse_body(node)
+        with self.block():
+            self.traverse(node.body)
 
     def _type_params_helper(self, type_params):
         if type_params is not None and len(type_params) > 0:
@@ -600,22 +645,22 @@ class LessASTWriter(NodeVisitor):
                 self.interleave(lambda: self.write(", "), self.traverse, type_params)
 
     def visit_TypeVar(self, node):
-        print("LessASTWriter.visit_TypeVar")
+        
         self.write(node.name)
         if node.bound:
             self.write(": ")
             self.traverse(node.bound)
 
     def visit_TypeVarTuple(self, node):
-        print("LessASTWriter.visit_TypeVarTuple")
+        
         self.write("*" + node.name)
 
     def visit_ParamSpec(self, node):
-        print("LessASTWriter.visit_ParamSpec")
+        
         self.write("**" + node.name)
 
     def visit_TypeAlias(self, node):
-        print("LessASTWriter.visit_TypeAlias")
+        
         self.fill("type ")
         self.traverse(node.name)
         self._type_params_helper(node.type_params)
@@ -623,11 +668,11 @@ class LessASTWriter(NodeVisitor):
         self.traverse(node.value)
 
     def visit_For(self, node):
-        print("LessASTWriter.visit_For")
+        
         self._for_helper("for ", node)
 
     def visit_AsyncFor(self, node):
-        print("LessASTWriter.visit_AsyncFor")
+        
         self._for_helper("async for ", node)
 
     def _for_helper(self, fill, node):
@@ -644,7 +689,7 @@ class LessASTWriter(NodeVisitor):
                 self.traverse(node.orelse)
 
     def visit_If(self, node):
-        print("LessASTWriter.visit_If")
+        
         self.fill("if ")
         self.traverse(node.test)
         with self.block():
@@ -663,7 +708,7 @@ class LessASTWriter(NodeVisitor):
                 self.traverse(node.orelse)
 
     def visit_While(self, node):
-        print("LessASTWriter.visit_While")
+        
         self.fill("while ")
         self.traverse(node.test)
         with self.block():
@@ -674,14 +719,14 @@ class LessASTWriter(NodeVisitor):
                 self.traverse(node.orelse)
 
     def visit_With(self, node):
-        print("LessASTWriter.visit_With")
+        
         self.fill("with ")
         self.interleave(lambda: self.write(", "), self.traverse, node.items)
         with self.block(extra=self.get_type_comment(node)):
             self.traverse(node.body)
 
     def visit_AsyncWith(self, node):
-        print("LessASTWriter.visit_AsyncWith")
+        
         self.fill("async with ")
         self.interleave(lambda: self.write(", "), self.traverse, node.items)
         with self.block(extra=self.get_type_comment(node)):
@@ -732,7 +777,7 @@ class LessASTWriter(NodeVisitor):
         self.write(f"{quote_type}{string}{quote_type}")
 
     def visit_JoinedStr(self, node):
-        print("LessASTWriter.visit_JoinedStr")
+        
         self.write("f")
 
         fstring_parts = []
@@ -799,7 +844,7 @@ class LessASTWriter(NodeVisitor):
             raise ValueError(f"Unexpected node inside JoinedStr, {node!r}")
 
     def visit_FormattedValue(self, node):
-        print("LessASTWriter.visit_FormattedValue")
+        
         def unparse_inner(inner):
             unparser = type(self)()
             unparser.set_precedence(_Precedence.TEST.next(), inner)
@@ -817,8 +862,11 @@ class LessASTWriter(NodeVisitor):
                 self.write(":")
                 self._write_fstring_inner(node.format_spec, is_format_spec=True)
 
+    def _static_method_helper(self, node):
+        node.id = node.id.replace(":", "")
+
     def visit_Name(self, node):
-        print("LessASTWriter.visit_Name")
+        self._static_method_helper(node)
         self.write(node.id)
 
     def _write_docstring(self, node):
@@ -842,7 +890,7 @@ class LessASTWriter(NodeVisitor):
             self.write(repr(value))
 
     def visit_Constant(self, node):
-        print("LessASTWriter.visit_Constant")
+        
         value = node.value
         if isinstance(value, tuple):
             with self.delimit("(", ")"):
@@ -855,33 +903,33 @@ class LessASTWriter(NodeVisitor):
             self._write_constant(node.value)
 
     def visit_List(self, node):
-        print("LessASTWriter.visit_List")
+        
         with self.delimit("[", "]"):
             self.interleave(lambda: self.write(", "), self.traverse, node.elts)
 
     def visit_ListComp(self, node):
-        print("LessASTWriter.visit_ListComp")
+        
         with self.delimit("[", "]"):
             self.traverse(node.elt)
             for gen in node.generators:
                 self.traverse(gen)
 
     def visit_GeneratorExp(self, node):
-        print("LessASTWriter.visit_GeneratorExp")
+        
         with self.delimit("(", ")"):
             self.traverse(node.elt)
             for gen in node.generators:
                 self.traverse(gen)
 
     def visit_SetComp(self, node):
-        print("LessASTWriter.visit_SetComp")
+        
         with self.delimit("{", "}"):
             self.traverse(node.elt)
             for gen in node.generators:
                 self.traverse(gen)
 
     def visit_DictComp(self, node):
-        print("LessASTWriter.visit_DictComp")
+        
         with self.delimit("{", "}"):
             self.traverse(node.key)
             self.write(": ")
@@ -890,7 +938,7 @@ class LessASTWriter(NodeVisitor):
                 self.traverse(gen)
 
     def visit_comprehension(self, node):
-        print("LessASTWriter.visit_comprehension")
+        
         if node.is_async:
             self.write(" async for ")
         else:
@@ -905,7 +953,7 @@ class LessASTWriter(NodeVisitor):
             self.traverse(if_clause)
 
     def visit_IfExp(self, node):
-        print("LessASTWriter.visit_IfExp")
+        
         with self.require_parens(_Precedence.TEST, node):
             self.set_precedence(_Precedence.TEST.next(), node.body, node.test)
             self.traverse(node.body)
@@ -916,7 +964,7 @@ class LessASTWriter(NodeVisitor):
             self.traverse(node.orelse)
 
     def visit_Set(self, node):
-        print("LessASTWriter.visit_Set")
+        
         if node.elts != []:
             with self.delimit("{", "}"):
                 self.interleave(lambda: self.write(", "), self.traverse, node.elts)
@@ -926,7 +974,7 @@ class LessASTWriter(NodeVisitor):
             self.write('{*()}')
 
     def visit_Dict(self, node):
-        print("LessASTWriter.visit_Dict")
+        
         def write_key_value_pair(k, v):
             self.traverse(k)
             self.write(": ")
@@ -949,7 +997,7 @@ class LessASTWriter(NodeVisitor):
             )
 
     def visit_Tuple(self, node):
-        print("LessASTWriter.visit_Tuple")
+        
         with self.delimit_if(
             "(",
             ")",
@@ -966,7 +1014,7 @@ class LessASTWriter(NodeVisitor):
     }
 
     def visit_UnaryOp(self, node):
-        print("LessASTWriter.visit_UnaryOp")
+        
         operator = self.unop[node.op.__class__.__name__]
         operator_precedence = self.unop_precedence[operator]
         with self.require_parens(operator_precedence, node):
@@ -1011,8 +1059,9 @@ class LessASTWriter(NodeVisitor):
     }
 
     binop_rassoc = frozenset(("**",))
+
     def visit_BinOp(self, node):
-        print("LessASTWriter.visit_BinOp")
+        
         try:
             operator = self.binop[node.op.__class__.__name__]
             operator_precedence = self.binop_precedence[operator]
@@ -1065,7 +1114,7 @@ class LessASTWriter(NodeVisitor):
         self.traverse(node.name)
 
     def visit_Compare(self, node):
-        print("LessASTWriter.visit_Compare")
+        
         with self.require_parens(_Precedence.CMP, node):
             self.set_precedence(_Precedence.CMP.next(), node.left, *node.comparators)
             self.traverse(node.left)
@@ -1077,7 +1126,7 @@ class LessASTWriter(NodeVisitor):
     boolop_precedence = {"and": _Precedence.AND, "or": _Precedence.OR}
 
     def visit_BoolOp(self, node):
-        print("LessASTWriter.visit_BoolOp")
+        
         operator = self.boolops[node.op.__class__.__name__]
         operator_precedence = self.boolop_precedence[operator]
 
@@ -1092,7 +1141,7 @@ class LessASTWriter(NodeVisitor):
             self.interleave(lambda: self.write(s), increasing_level_traverse, node.values)
 
     def visit_Attribute(self, node):
-        print("LessASTWriter.visit_Attribute")
+        
         self.set_precedence(_Precedence.ATOM, node.value)
         self.traverse(node.value)
         # Special case: 3.__abs__() is a syntax error, so if node.value
@@ -1108,9 +1157,18 @@ class LessASTWriter(NodeVisitor):
             return args
         elif isinstance(args, ast.arguments):
             return args.args
-        
-    def visit_Call(self, node):
-        print("LessASTWriter.visit_Call")
+    
+    def _super_method_help(self, node):
+        if self._inside_class == True and self._inside_method == True:
+            if isinstance(node.func, ast.Attribute):
+                if isinstance(node.func.value, ast.Name):
+                    if node.func.value.id in [x.name.id for x in self._current_class.bases]:
+                        node.func.value.id = "\n        super()"
+                        if node.func.attr.id == "init":
+                            node.func.attr.id = "__init__"
+
+    def visit_Call(self, node:ast.Call):
+        self._super_method_help(node)
         self.set_precedence(_Precedence.ATOM, node.func)
         self.traverse(node.func)
         with self.delimit("(", ")"):
@@ -1130,7 +1188,7 @@ class LessASTWriter(NodeVisitor):
                     self.traverse(e)
 
     def visit_Subscript(self, node):
-        print("LessASTWriter.visit_Subscript")
+        
         def is_non_empty_tuple(slice_value):
             return (
                 isinstance(slice_value, ast.Tuple)
@@ -1147,17 +1205,17 @@ class LessASTWriter(NodeVisitor):
                 self.traverse(node.slice)
 
     def visit_Starred(self, node):
-        print("LessASTWriter.visit_Starred")
+        
         self.write("*")
         self.set_precedence(_Precedence.EXPR, node.value)
         self.traverse(node.value)
 
     def visit_Ellipsis(self, node):
-        print("LessASTWriter.visit_Ellipsis")
+        
         self.write("...")
 
     def visit_Slice(self, node):
-        print("LessASTWriter.visit_Slice")
+        
         if node.lower:
             self.traverse(node.lower)
         self.write(":")
@@ -1168,7 +1226,7 @@ class LessASTWriter(NodeVisitor):
             self.traverse(node.step)
 
     def visit_Match(self, node):
-        print("LessASTWriter.visit_Match")
+        
         self.fill("match ")
         self.traverse(node.subject)
         with self.block():
@@ -1176,14 +1234,14 @@ class LessASTWriter(NodeVisitor):
                 self.traverse(case)
 
     def visit_arg(self, node):
-        print("LessASTWriter.visit_arg")
+        
         self.write(node.arg)
-        if node.annotation:
-            self.write(": ")
-            self.traverse(node.annotation)
+        #if node.annotation != []:
+        #    self.write(": ")
+        #    self.traverse(node.annotation)
 
     def visit_arguments(self, node):
-        print("LessASTWriter.visit_arguments")
+        
         first = True
         # normal arguments
         all_args = node.posonlyargs
@@ -1234,7 +1292,7 @@ class LessASTWriter(NodeVisitor):
                 self.traverse(node.kwarg.annotation)
 
     def visit_keyword(self, node):
-        print("LessASTWriter.visit_keyword")
+        
         if node.arg is None:
             self.write("**")
         else:
@@ -1243,7 +1301,7 @@ class LessASTWriter(NodeVisitor):
         self.traverse(node.value)
 
     def visit_Lambda(self, node):
-        print("LessASTWriter.visit_Lambda")
+        
         with self.require_parens(_Precedence.TEST, node):
             self.write("lambda")
             with self.buffered() as buffer:
@@ -1255,20 +1313,20 @@ class LessASTWriter(NodeVisitor):
             self.traverse(node.body)
 
     def visit_alias(self, node):
-        print("LessASTWriter.visit_alias")
+        
         self.write(node.name)
         if node.asname:
             self.write(" as " + node.asname)
 
     def visit_withitem(self, node):
-        print("LessASTWriter.visit_withitem")
+        
         self.traverse(node.context_expr)
         if node.optional_vars:
             self.write(" as ")
             self.traverse(node.optional_vars)
 
     def visit_match_case(self, node):
-        print("LessASTWriter.visit_match_case")
+        
         self.fill("case ")
         self.traverse(node.pattern)
         if node.guard:
@@ -1278,29 +1336,29 @@ class LessASTWriter(NodeVisitor):
             self.traverse(node.body)
 
     def visit_MatchValue(self, node):
-        print("LessASTWriter.visit_MatchValue")
+        
         self.traverse(node.value)
 
     def visit_MatchSingleton(self, node):
-        print("LessASTWriter.visit_MatchSingleton")
+        
         self._write_constant(node.value)
 
     def visit_MatchSequence(self, node):
-        print("LessASTWriter.visit_MatchSequence")
+        
         with self.delimit("[", "]"):
             self.interleave(
                 lambda: self.write(", "), self.traverse, node.patterns
             )
 
     def visit_MatchStar(self, node):
-        print("LessASTWriter.visit_MatchStar")
+        
         name = node.name
         if name is None:
             name = "_"
         self.write(f"*{name}")
 
     def visit_MatchMapping(self, node):
-        print("LessASTWriter.visit_MatchMapping")
+        
         def write_key_pattern_pair(pair):
             k, p = pair
             self.traverse(k)
@@ -1321,7 +1379,7 @@ class LessASTWriter(NodeVisitor):
                 self.write(f"**{rest}")
 
     def visit_MatchClass(self, node):
-        print("LessASTWriter.visit_MatchClass")
+        
         self.set_precedence(_Precedence.ATOM, node.cls)
         self.traverse(node.cls)
         with self.delimit("(", ")"):
@@ -1345,7 +1403,7 @@ class LessASTWriter(NodeVisitor):
                 )
 
     def visit_MatchAs(self, node):
-        print("LessASTWriter.visit_MatchAs")
+        
         name = node.name
         pattern = node.pattern
         if name is None:
@@ -1359,7 +1417,7 @@ class LessASTWriter(NodeVisitor):
                 self.write(f" as {node.name}")
 
     def visit_MatchOr(self, node):
-        print("LessASTWriter.visit_MatchOr")
+        
         with self.require_parens(_Precedence.BOR, node):
             self.set_precedence(_Precedence.BOR.next(), *node.patterns)
             self.interleave(lambda: self.write(" | "), self.traverse, node.patterns)

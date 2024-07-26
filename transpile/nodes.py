@@ -20,8 +20,9 @@ class MethodCall:
         self.object:ast.Attribute = object
         self.args:ast.arguments = args
 
-class ClassBase:
-    def __init__(self, name:str) -> None:
+class ClassBase(ast.AST):
+    def __init__(self, name:str="") -> None:
+        super().__init__()
         self.name = ast.Name(id=name, ctx=ast.Load())
 
 class KeywordArgument:
@@ -30,7 +31,7 @@ class KeywordArgument:
         self.arg:ast.arg = arg
 
 class Range:
-    def __init__(self, start:int, stop:int, step:int) -> None:
+    def __init__(self, start:int=0, stop:int=0, step:int=0) -> None:
         self.start = ast.Constant(value=start, kind="i")  
         self.stop = ast.Constant(value=start, kind="i")
         self.step = ast.Constant(value=start, kind="i")
