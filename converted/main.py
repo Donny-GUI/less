@@ -57,7 +57,21 @@ def run():
     run_time = math.min()
     G.FPS_CAP = G.FPS_CAP if G.FPS_CAP else 500
     if run_time < 1.0 / G.FPS_CAP:love.timer.sleep()
-def load():G.start_up()love.mouse.setVisible(False)
+def load():G.start_up()
+    os = love.system.getOS()
+    if os == 'OS X' if os == 'OS X' else os == 'Windows':
+        st = 'None'
+        if os == 'OS X':
+            dir = love.filesystem.getSourceBaseDirectory()
+            old_cpath = package.cpath
+            package.cpath = package.cpath + ';' + dir + '/?.so'
+            st = 
+            package.cpath = old_cpath
+        else:
+            st = 
+        st.send_control = {'last_sent_time': -200, 'last_sent_stage': -1, 'force': False}
+        if not st.init & st.init():love.event.quit()
+        G.STEAM = stlove.mouse.setVisible(False)
 def quit():
     if G.SOUND_MANAGER:G.SOUND_MANAGER.channel.push()
     if G.STEAM:G.STEAM.shutdown()
@@ -88,6 +102,41 @@ def errhand(msg):
     if G.F_NO_ERROR_HAND:
         return False
     msg = tostring(msg)
+    if G.SETTINGS.crashreports & _RELEASE_MODE & G.F_CRASH_REPORTS:
+        http_thread = love.thread.newThread(
+			local https = require('https')
+			CHANNEL = love.thread.getChannel("http_channel")
+
+			while true do
+				--Monitor the channel for any new requests
+				local request = CHANNEL:demand()
+				if request then
+					https.request(request)
+				end
+			end
+		)
+        http_channel = love.thread.getChannel(http_channel)http_thread.start()
+        httpencode = lambda str: 
+        char_to_hex = lambda c: 
+        return string.format(%%%02X)
+        str = str.gsub(\n, \r\n).gsub(([^%w _%%%-%.~]), char_to_hex).gsub( , +)
+        return str
+        error = msg
+        file = string.sub(msg, 0)
+        function_line = string.sub(msg)
+        function_line = string.sub(function_line, 0)
+        file = string.sub(file, 0)
+        trace = debug.traceback()
+        boot_found = func_found = (False, False)
+        for l in string.gmatch(trace, (.-)\n):
+            if string.match(l, boot.lua):
+                boot_found = True
+            elif boot_found & (not func_found):
+                func_found = True
+                trace = ''
+                function_line = string.sub(l) + ' line:' + function_line
+            if boot_found & func_found:
+                trace = trace + l + '\\n'http_channel.push()
     if (not love.window if not love.window else not love.graphics) if (not love.window if not love.window else not love.graphics) else not love.event:
         return False
     if not love.graphics.isCreated() if not love.graphics.isCreated() else not love.window.isOpen():
@@ -99,6 +148,7 @@ def errhand(msg):
         for iv in ipairs():v.setVibration()
     if love.audio:love.audio.stop()love.graphics.reset()
     font = love.graphics.setNewFont(resources/fonts/m6x11plus.ttf, 20)love.graphics.clear()love.graphics.origin()
+    p = 'Oops! Something went wrong:\\n' + msg + '\\n\\n' + (((not _RELEASE_MODE) & debug.traceback() if (not _RELEASE_MODE) & debug.traceback() else G.SETTINGS.crashreports & "Since you are opted in to sending crash reports, LocalThunk HQ was sent some useful info about what happened.\\nDon\\'t worry! There is no identifying or personal information. If you would like\\nto opt out, change the \\'Crash Report\\' setting to Off") if ((not _RELEASE_MODE) & debug.traceback() if (not _RELEASE_MODE) & debug.traceback() else G.SETTINGS.crashreports & "Since you are opted in to sending crash reports, LocalThunk HQ was sent some useful info about what happened.\\nDon\\'t worry! There is no identifying or personal information. If you would like\\nto opt out, change the \\'Crash Report\\' setting to Off") else 'Crash Reports are set to Off. If you would like to send crash reports, please opt in in the Game settings.\\nThese crash reports help us avoid issues like this in the future')
 
     def draw():
         pos = love.window.toPixels(70)love.graphics.push()love.graphics.clear()love.graphics.setColor(1.0, 1.0, 1.0, 1.0)love.graphics.printf(p, font, pos, pos)love.graphics.pop()love.graphics.present()

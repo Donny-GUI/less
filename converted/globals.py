@@ -3,8 +3,8 @@ VERSION = VERSION + '-FULL'
 def set_globals(self):
     self.VERSION = VERSION
     self.F_QUIT_BUTTON = True
-    self.F_SKIP_TUTORIAL = True
-    self.F_BASIC_CREDITS = True
+    self.F_SKIP_TUTORIAL = False
+    self.F_BASIC_CREDITS = False
     self.F_EXTERNAL_LINKS = True
     self.F_ENABLE_PERF_OVERLAY = False
     self.F_NO_SAVING = False
@@ -84,7 +84,7 @@ def set_globals(self):
         self.F_HIDE_BETA_LANGS = True
         self.F_NO_ERROR_HAND = True
         self.F_DISP_USERNAME = True
-        self.F_SKIP_TUTORIAL = True
+        self.F_SKIP_TUTORIAL = False
         self.F_ENABLE_PERF_OVERLAY = False
         self.F_NO_SAVING = False
         self.F_MUTE = False
@@ -99,7 +99,7 @@ def set_globals(self):
     self.TIMERS = {'TOTAL': 0, 'REAL': 0, 'REAL_SHADER': 0, 'UPTIME': 0, 'BACKGROUND': 0}
     self.FRAMES = {'DRAW': 0, 'MOVE': 0}
     self.exp_times = {'xy': 0, 'scale': 0, 'r': 0}
-    self.SETTINGS = {'COMP': {'name': '', 'prev_name': '', 'submission_name': 'None', 'score': 0}, 'DEMO': {'total_uptime': 0, 'timed_CTA_shown': False, 'win_CTA_shown': False, 'quit_CTA_shown': False}, 'ACHIEVEMENTS_EARNED': {}, 'crashreports': False, 'colourblind_option': False, 'language': 'en-us', 'screenshake': True, 'rumble': self.F_RUMBLE, 'play_button_pos': 2, 'GAMESPEED': 12, 'paused': False, 'SOUND': {'volume': 50, 'music_volume': 100, 'game_sounds_volume': 100}, 'WINDOW': {'screenmode': 'Borderless', 'vsync': 1, 'selected_display': 1, 'display_names': {1: '[NONE]'}, 'DISPLAYS': {1: {'name': '[NONE]', 'screen_res': {'w': 1000, 'h': 650}}}}, 'GRAPHICS': {'texture_scaling': 2, 'shadows': 'On', 'crt': 70, 'bloom': 1}}
+    self.SETTINGS = {'COMP': {'name': '', 'prev_name': '', 'submission_name': 'None', 'score': 0}, 'DEMO': {'total_uptime': 0, 'timed_CTA_shown': False, 'win_CTA_shown': False, 'quit_CTA_shown': False}, 'ACHIEVEMENTS_EARNED': {}, 'crashreports': False, 'colourblind_option': False, 'language': 'en-us', 'screenshake': True, 'rumble': self.F_RUMBLE, 'play_button_pos': 2, 'GAMESPEED': 1, 'paused': False, 'SOUND': {'volume': 50, 'music_volume': 100, 'game_sounds_volume': 100}, 'WINDOW': {'screenmode': 'Borderless', 'vsync': 1, 'selected_display': 1, 'display_names': {1: '[NONE]'}, 'DISPLAYS': {1: {'name': '[NONE]', 'screen_res': {'w': 1000, 'h': 650}}}}, 'GRAPHICS': {'texture_scaling': 2, 'shadows': 'On', 'crt': 70, 'bloom': 1}}
     self.METRICS = {'cards': {'used': {}, 'bought': {}, 'appeared': {}}, 'decks': {'chosen': {}, 'win': {}, 'lose': {}}, 'bosses': {'faced': {}, 'win': {}, 'lose': {}}}
     self.PROFILES = {1: {}, 2: {}, 3: {}}
     self.TILESIZE = 20
